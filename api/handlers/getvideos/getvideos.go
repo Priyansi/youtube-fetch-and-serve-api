@@ -7,8 +7,6 @@ import (
 	"github.com/priyansi/fampay-backend-assignment/db/youtubevideoinfo"
 )
 
-const perPageLimit = 5
-
 func Do(c *fiber.Ctx) error {
 
 	page, err := strconv.Atoi(c.Query("page", "1"))
@@ -18,7 +16,7 @@ func Do(c *fiber.Ctx) error {
 		})
 	}
 
-	videos := youtubevideoinfo.GetVideos(perPageLimit, int64(page))
+	videos := youtubevideoinfo.GetVideos(int64(page))
 
 	return c.JSON(fiber.Map{
 		"videos": videos,

@@ -9,13 +9,21 @@ import (
 )
 
 type Config struct {
-	AddrPort   string
-	ApiKey     string
-	Etag       string
-	MaxResults int64
-	Query      string
-	MongoDbURI string
+	AddrPort                    string
+	Etag                        string
+	MaxVideosFetched            int64
+	PerPageLimit                int64
+	FetchLatestVideosSeconds    int64
+	CheckApiKeysValidityMinutes int64
+	Query                       string
+	MongoDbURI                  string
 }
+
+const (
+	DEFAULT_MAX_TOKENS                  = 5
+	DEFAULT_PER_PAGE_LIMIT              = 5
+	DEFAULT_FETCH_LATEST_VIDEOS_SECONDS = 10
+)
 
 var config Config
 
@@ -32,27 +40,39 @@ func InitConfig() {
 	if config.Query == "" {
 		logger.Error.Fatalf("Config: Environment variable QUERY not found. Please refer to README to find how to set it.")
 	}
-	flag.StringVar(&config.ApiKey, "apikey", os.Getenv("API_KEY"), "YouTube API Key")
-	flag.StringVar(&config.Etag, "etag", os.Getenv("ETAG"), "Etag for a particular API response. Useful in caching")
-	flag.Int64Var(&config.MaxResults, "maxresults", utils.GetEnvInt("MAX_RESULTS"), "Max results that can be fetched in a single API call")
+	flag.Int64Var(&config.MaxVideosFetched, "maxvideosfetched", utils.GetEnvInt("MAX_VIDEOS_FETCHED", DEFAULT_MAX_TOKENS), "Max videos that can be fetched in a single API call")
+	flag.Int64Var(&config.PerPageLimit, "perpagelimit", utils.GetEnvInt("PER_PAGE_LIMIT", DEFAULT_PER_PAGE_LIMIT), "Number of videos to be displayed per page")
+	flag.Int64Var(&config.FetchLatestVideosSeconds, "fetchlatestvideosseconds", utils.GetEnvInt("FETCH_LATEST_VIDEOS_SECONDS", DEFAULT_FETCH_LATEST_VIDEOS_SECONDS), "Number of seconds after which latest videos are fetched from youtube and database is updated")
+	flag.Int64Var(&config.CheckApiKeysValidityMinutes, "checkapikeysvalidityminutes", utils.GetEnvInt("CHECK_API_KEYS_VALIDITY_MINUTES", DEFAULT_FETCH_LATEST_VIDEOS_SECONDS), "Number of minutes after which API keys are checked for validity and database is updated")
 
 	flag.Parse()
+
+	// etag will be empty for the first API call
+	config.Etag = ""
 }
 
 func GetAddrPort() string {
 	return config.AddrPort
 }
 
-func GetApiKey() string {
-	return config.ApiKey
-}
-
 func GetQuery() string {
 	return config.Query
 }
 
-func GetMaxResults() int64 {
-	return config.MaxResults
+func GetMaxVideosFetched() int64 {
+	return config.MaxVideosFetched
+}
+
+func GetPerPageLimit() int64 {
+	return config.PerPageLimit
+}
+
+func GetFetchLatestVideosSeconds() int64 {
+	return config.FetchLatestVideosSeconds
+}
+
+func GetCheckApiKeysValidityMinutes() int64 {
+	return config.CheckApiKeysValidityMinutes
 }
 
 func GetMongoDbURI() string {

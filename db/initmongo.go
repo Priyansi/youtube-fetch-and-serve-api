@@ -15,6 +15,7 @@ import (
 func InitMongoDb() {
 	client := ConnectToMongoDb()
 	youtubevideoinfo.SetCollection(client)
+	youtubevideoinfo.CreateTitleAndDescriptionIndex()
 	apikeys.SetCollection(client)
 }
 

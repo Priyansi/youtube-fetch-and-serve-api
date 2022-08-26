@@ -7,8 +7,6 @@ import (
 	"github.com/priyansi/fampay-backend-assignment/db/youtubevideoinfo"
 )
 
-const perPageLimit = 5
-
 func Do(c *fiber.Ctx) error {
 	searchQuery := c.Query("query", "")
 	if searchQuery == "" {
@@ -25,6 +23,6 @@ func Do(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{
-		"videos": youtubevideoinfo.SearchVideos(searchQuery, perPageLimit, int64(page)),
+		"videos": youtubevideoinfo.SearchVideos(searchQuery, int64(page)),
 	})
 }

@@ -7,18 +7,16 @@ import (
 	"github.com/priyansi/fampay-backend-assignment/pkg/logger"
 )
 
-const DEFAULT_MAXTOKENS_VAL = 5
-
-func GetEnvInt(key string) int64 {
+func GetEnvInt(key string, defaultVal int64) int64 {
 	s := os.Getenv(key)
 	if s == "" {
-		logger.Info.Printf("Utils: environment variable %v not found, using default value %v.", key, DEFAULT_MAXTOKENS_VAL)
-		return DEFAULT_MAXTOKENS_VAL
+		logger.Info.Printf("Utils: environment variable %v not found, using default value %v.", key, defaultVal)
+		return defaultVal
 	}
 	v, err := strconv.Atoi(s)
 	if err != nil {
-		logger.Info.Printf("Utils: environment variable %v not found, using default value %v.", key, DEFAULT_MAXTOKENS_VAL)
-		return DEFAULT_MAXTOKENS_VAL
+		logger.Info.Printf("Utils: environment variable %v not found, using default value %v.", key, defaultVal)
+		return defaultVal
 	}
 	return int64(v)
 }

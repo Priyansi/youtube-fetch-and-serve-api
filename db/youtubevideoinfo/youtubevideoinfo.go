@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/priyansi/fampay-backend-assignment/db/apikeys"
 	"github.com/priyansi/fampay-backend-assignment/pkg/config"
 	"github.com/priyansi/fampay-backend-assignment/pkg/logger"
 	"github.com/priyansi/fampay-backend-assignment/pkg/types"
@@ -25,6 +26,9 @@ const (
 
 func SetCollection(client *mongo.Client) {
 	collection = client.Database("youtube-fetch-search").Collection("youtube-video-info")
+}
+
+func CreateTitleAndDescriptionIndex() {
 	model := mongo.IndexModel{
 		Keys: bson.D{
 			{Key: "title", Value: "text"},
@@ -41,7 +45,7 @@ func SetCollection(client *mongo.Client) {
 
 	_, err := collection.Indexes().CreateOne(context.TODO(), model, options)
 	if err != nil {
-		logger.Error.Printf("SetCollection: Error creating index: %v", err)
+		logger.Error.Fatalf("SetCollection: Error creating index: %v", err)
 	}
 }
 
@@ -73,14 +77,20 @@ func bulkInsert(videos []types.Video) error {
 
 func FetchNewVideosAndUpdateDb() error {
 	ctx := context.Background()
-	youtubeService, err := youtube.NewService(ctx, option.WithAPIKey(config.GetApiKey()))
+	key, err := apikeys.GetValidKey()
+	if err != nil {
+		logger.Error.Printf("FetchNewVideosAndUpdateDb: Error fetching valid key: %v", err)
+		logger.Error.Printf("FetchNewVideosAndUpdateDb: Please post new api keys as given in README")
+		return err
+	}
+	youtubeService, err := youtube.NewService(ctx, option.WithAPIKey(key))
 	if err != nil {
 		logger.Error.Fatalf("FetchNewVideosAndUpdateDb: Error creating new service: %v", err)
 	}
 
 	call := youtubeService.Search.List([]string{"id,snippet"}).
 		Q(config.GetQuery()).
-		MaxResults(config.GetMaxResults()).
+		MaxResults(config.GetMaxVideosFetched()).
 		Order(ytServiceOrderBy).
 		Type(ytServiceType).
 		PublishedAfter(ytServicePublishedAfter)
@@ -129,11 +139,11 @@ func getFindOptions(perPageLimit int64, currPage int64) *options.FindOptions {
 	return findOptions
 }
 
-func GetVideos(perPageLimit int64, currPage int64) []types.Video {
+func GetVideos(currPage int64) []types.Video {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cursor, err := collection.Find(ctx, bson.M{}, getFindOptions(perPageLimit, currPage))
+	cursor, err := collection.Find(ctx, bson.M{}, getFindOptions(config.GetPerPageLimit(), currPage))
 	if err != nil {
 		logger.Error.Printf("GetVideos: Error fetching videos: %v", err)
 		return nil
@@ -153,12 +163,13 @@ func GetVideos(perPageLimit int64, currPage int64) []types.Video {
 	return videos
 }
 
-func SearchVideos(query string, perPageLimit int64, currPage int64) []types.Video {
+func SearchVideos(query string, currPage int64) []types.Video {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	logger.Info.Printf("SearchVideos: Searching for %v", query)
 
+	perPageLimit := config.GetPerPageLimit()
 	// search only in title and description
 	filter := bson.M{
 		"$text": bson.M{
@@ -179,7 +190,7 @@ func SearchVideos(query string, perPageLimit int64, currPage int64) []types.Vide
 	secondMatchStage := bson.D{
 		{Key: "$match", Value: bson.M{
 			"score": bson.M{
-				"$gte": 1.5,
+				"$gte": 1,
 			},
 		}},
 	}

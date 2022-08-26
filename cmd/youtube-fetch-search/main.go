@@ -8,6 +8,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/priyansi/fampay-backend-assignment/api/router"
 	"github.com/priyansi/fampay-backend-assignment/db"
+	"github.com/priyansi/fampay-backend-assignment/db/apikeys"
 	"github.com/priyansi/fampay-backend-assignment/db/youtubevideoinfo"
 	"github.com/priyansi/fampay-backend-assignment/pkg/config"
 	"github.com/priyansi/fampay-backend-assignment/pkg/logger"
@@ -22,7 +23,7 @@ func main() {
 	db.InitMongoDb()
 
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(time.Duration(config.GetFetchLatestVideosSeconds()) * time.Second)
 		quit := make(chan struct{})
 		for {
 			select {
@@ -37,6 +38,20 @@ func main() {
 			}
 		}
 
+	}()
+
+	go func() {
+		ticker := time.NewTicker(time.Duration(config.GetCheckApiKeysValidityMinutes()) * time.Minute)
+		quit := make(chan struct{})
+		for {
+			select {
+			case <-ticker.C:
+				apikeys.CheckValidityOfKeys()
+			case <-quit:
+				ticker.Stop()
+				return
+			}
+		}
 	}()
 
 	app := fiber.New()

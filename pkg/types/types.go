@@ -7,3 +7,9 @@ type Video struct {
 	Description string `json:"description" bson:"description"`
 	PublishedAt string `json:"publishedAt" bson:"publishedAt"`
 }
+
+type ApiKey struct {
+	Id        string `json:"_id,omitempty" bson:"_id,omitempty"`
+	Key       string `json:"key" bson:"key"`
+	IsExpired bool   `json:"isExpired" bson:"isExpired"`
+}
