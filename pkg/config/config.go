@@ -11,7 +11,7 @@ import (
 type Config struct {
 	AddrPort   string
 	ApiKey     string
-	PageToken  string
+	Etag       string
 	MaxResults int64
 	Query      string
 	MongoDbURI string
@@ -33,7 +33,7 @@ func InitConfig() {
 		logger.Error.Fatalf("Config: Environment variable QUERY not found. Please refer to README to find how to set it.")
 	}
 	flag.StringVar(&config.ApiKey, "apikey", os.Getenv("API_KEY"), "YouTube API Key")
-	flag.StringVar(&config.PageToken, "pagetoken", os.Getenv("PAGE_TOKEN"), "Used for pagination when fetching responses subsequently")
+	flag.StringVar(&config.Etag, "etag", os.Getenv("ETAG"), "Etag for a particular API response. Useful in caching")
 	flag.Int64Var(&config.MaxResults, "maxresults", utils.GetEnvInt("MAX_RESULTS"), "Max results that can be fetched in a single API call")
 
 	flag.Parse()
@@ -45,10 +45,6 @@ func GetAddrPort() string {
 
 func GetApiKey() string {
 	return config.ApiKey
-}
-
-func GetPageToken() string {
-	return config.PageToken
 }
 
 func GetQuery() string {
@@ -63,6 +59,10 @@ func GetMongoDbURI() string {
 	return config.MongoDbURI
 }
 
-func SetPageToken(pageToken string) {
-	config.PageToken = pageToken
+func GetEtag() string {
+	return config.Etag
+}
+
+func SetEtag(etag string) {
+	config.Etag = etag
 }

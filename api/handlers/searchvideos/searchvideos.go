@@ -1,4 +1,4 @@
-package getvideos
+package searchvideos
 
 import (
 	"strconv"
@@ -10,6 +10,12 @@ import (
 const perPageLimit = 5
 
 func Do(c *fiber.Ctx) error {
+	searchQuery := c.Query("query", "")
+	if searchQuery == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "query param is required",
+		})
+	}
 
 	page, err := strconv.Atoi(c.Query("page", "1"))
 	if err != nil {
@@ -18,9 +24,7 @@ func Do(c *fiber.Ctx) error {
 		})
 	}
 
-	videos := youtubevideoinfo.GetVideos(perPageLimit, int64(page))
-
 	return c.JSON(fiber.Map{
-		"videos": videos,
+		"videos": youtubevideoinfo.SearchVideos(searchQuery, perPageLimit, int64(page)),
 	})
 }

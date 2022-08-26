@@ -2,48 +2,45 @@ package main
 
 import (
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
+	fiber "github.com/gofiber/fiber/v2"
 	"github.com/joho/godotenv"
 	"github.com/priyansi/fampay-backend-assignment/api/router"
+	"github.com/priyansi/fampay-backend-assignment/db"
+	"github.com/priyansi/fampay-backend-assignment/db/youtubevideoinfo"
 	"github.com/priyansi/fampay-backend-assignment/pkg/config"
 	"github.com/priyansi/fampay-backend-assignment/pkg/logger"
-	"github.com/priyansi/fampay-backend-assignment/pkg/server"
 )
 
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("main: failed to load environment variables")
 	}
+
 	config.InitConfig()
-	srv := server.
-		Get().
-		SetAddrPort(config.GetAddrPort()).
-		SetRouter(router.Get()).
-		SetLogger(logger.Error)
+	db.InitMongoDb()
 
 	go func() {
-		logger.Info.Printf("Starting server at %s", config.GetAddrPort())
-		if err := srv.Start(); err != nil {
-			logger.Error.Fatal(err.Error())
+		ticker := time.NewTicker(10 * time.Second)
+		quit := make(chan struct{})
+		for {
+			select {
+			case <-ticker.C:
+				err := youtubevideoinfo.FetchNewVideosAndUpdateDb()
+				if err != nil {
+					logger.Error.Printf("main: error fetching new videos and updating db: %v", err)
+				}
+			case <-quit:
+				ticker.Stop()
+				return
+			}
 		}
+
 	}()
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	app := fiber.New()
+	router.SetRoutes(app)
 
-	switch <-ch {
-	case os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGINT:
-		logger.Info.Println("Interrupt signal received, exiting.")
-		logger.Info.Println("Last page token: ", config.GetPageToken())
-		logger.Info.Println("Server shutdown")
-		os.Exit(0)
-	default:
-		logger.Info.Println("Something went wrong.")
-		logger.Info.Println("Last page token: ", config.GetPageToken())
-		logger.Info.Println("Server shutdown")
-		os.Exit(1)
-	}
+	app.Listen(config.GetAddrPort())
 }
