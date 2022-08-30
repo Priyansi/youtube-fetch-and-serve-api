@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"time"
 
 	fiber "github.com/gofiber/fiber/v2"
@@ -12,11 +11,14 @@ import (
 	"github.com/priyansi/fampay-backend-assignment/db/youtubevideoinfo"
 	"github.com/priyansi/fampay-backend-assignment/pkg/config"
 	"github.com/priyansi/fampay-backend-assignment/pkg/logger"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
+	logger.InitLogger()
+
 	if err := godotenv.Load(); err != nil {
-		log.Println("main: failed to load environment variables")
+		log.Fatal("main: failed to load environment variables")
 	}
 
 	config.InitConfig()
@@ -30,7 +32,7 @@ func main() {
 			case <-ticker.C:
 				err := youtubevideoinfo.FetchNewVideosAndUpdateDb()
 				if err != nil {
-					logger.Error.Printf("main: error fetching new videos and updating db: %v", err)
+					log.Errorf("main: error fetching new videos and updating db: %v", err)
 				}
 			case <-quit:
 				ticker.Stop()
@@ -41,17 +43,18 @@ func main() {
 	}()
 
 	go func() {
-		ticker := time.NewTicker(time.Duration(config.GetCheckApiKeysValidityMinutes()) * time.Minute)
+		ticker := time.NewTicker(time.Duration(config.GetUpdateApiKeysExpirationMinutes()) * time.Minute)
 		quit := make(chan struct{})
 		for {
 			select {
 			case <-ticker.C:
-				apikeys.CheckValidityOfKeys()
+				apikeys.UpdateExpirationOfExpiredKeys()
 			case <-quit:
 				ticker.Stop()
 				return
 			}
 		}
+
 	}()
 
 	app := fiber.New()

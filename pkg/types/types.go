@@ -1,5 +1,7 @@
 package types
 
+import "time"
+
 type Video struct {
 	Id          string `json:"_id,omitempty" bson:"_id,omitempty"`
 	UniqueId    string `json:"uniqueId" bson:"uniqueId"`
@@ -9,7 +11,8 @@ type Video struct {
 }
 
 type ApiKey struct {
-	Id        string `json:"_id,omitempty" bson:"_id,omitempty"`
-	Key       string `json:"key" bson:"key"`
-	IsExpired bool   `json:"isExpired" bson:"isExpired"`
+	Id          string    `json:"_id,omitempty" bson:"_id,omitempty"`
+	Key         string    `json:"key" bson:"key"`
+	IsExpired   bool      `json:"isExpired" bson:"isExpired"`
+	LastUpdated time.Time `json:"lastUpdated" bson:"lastUpdated"`
 }

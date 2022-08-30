@@ -2,12 +2,13 @@ package youtubevideoinfo
 
 import (
 	"context"
-	"fmt"
+	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/priyansi/fampay-backend-assignment/db/apikeys"
 	"github.com/priyansi/fampay-backend-assignment/pkg/config"
-	"github.com/priyansi/fampay-backend-assignment/pkg/logger"
 	"github.com/priyansi/fampay-backend-assignment/pkg/types"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -45,7 +46,7 @@ func CreateTitleAndDescriptionIndex() {
 
 	_, err := collection.Indexes().CreateOne(context.TODO(), model, options)
 	if err != nil {
-		logger.Error.Fatalf("SetCollection: Error creating index: %v", err)
+		log.Fatalf("SetCollection: Error creating index: %v", err)
 	}
 }
 
@@ -68,10 +69,10 @@ func bulkInsert(videos []types.Video) error {
 	opts := options.BulkWrite().SetOrdered(false)
 	res, err := collection.BulkWrite(context.Background(), models, opts)
 	if err != nil {
-		logger.Error.Printf("BulkInsert: Error inserting many: %v", err)
+		log.Errorf("BulkInsert: Error inserting many: %v", err)
 		return err
 	}
-	logger.Info.Printf("BulkInsert: Inserted %v documents into collection", res.UpsertedCount)
+	log.Infof("BulkInsert: Inserted %v documents into collection", res.UpsertedCount)
 	return nil
 }
 
@@ -79,13 +80,13 @@ func FetchNewVideosAndUpdateDb() error {
 	ctx := context.Background()
 	key, err := apikeys.GetValidKey()
 	if err != nil {
-		logger.Error.Printf("FetchNewVideosAndUpdateDb: Error fetching valid key: %v", err)
-		logger.Error.Printf("FetchNewVideosAndUpdateDb: Please post new api keys as given in README")
+		log.Errorf("FetchNewVideosAndUpdateDb: Error fetching valid key: %v", err)
+		log.Errorf("FetchNewVideosAndUpdateDb: Please post new api keys as given in README")
 		return err
 	}
 	youtubeService, err := youtube.NewService(ctx, option.WithAPIKey(key))
 	if err != nil {
-		logger.Error.Fatalf("FetchNewVideosAndUpdateDb: Error creating new service: %v", err)
+		log.Errorf("FetchNewVideosAndUpdateDb: Error creating new service: %v", err)
 	}
 
 	call := youtubeService.Search.List([]string{"id,snippet"}).
@@ -102,14 +103,22 @@ func FetchNewVideosAndUpdateDb() error {
 	response, err := call.Do()
 	if err != nil {
 		if err.Error() == "googleapi: got HTTP response code 304 with body: " {
-			logger.Info.Println("FetchNewVideosAndUpdateDb: Etag has not changed. Skipping update.")
+			log.Info("FetchNewVideosAndUpdateDb: Etag has not changed. Skipping update.")
 			return nil
 		}
-		logger.Error.Printf("FetchNewVideosAndUpdateDb: Error fetching response: %v", err)
+		if strings.Contains(err.Error(), "quotaExceeded") {
+			log.Info("FetchNewVideosAndUpdateDb: Quota exceeded. Setting key to expired. Skipping update.")
+			err := apikeys.SetKeyToExpired(key)
+			if err != nil {
+				log.Errorf("FetchNewVideosAndUpdateDb: Error setting quota exceeded key to expired: %v", err)
+			}
+			return err
+		}
+		log.Errorf("FetchNewVideosAndUpdateDb: Error fetching response: %v", err)
 		return err
 	}
 
-	logger.Info.Println("FetchNewVideosAndUpdateDb: Fetched response from youtube")
+	log.Info("FetchNewVideosAndUpdateDb: Fetched response from youtube")
 	videos := make([]types.Video, 0)
 	for _, item := range response.Items {
 		video := types.Video{
@@ -121,10 +130,10 @@ func FetchNewVideosAndUpdateDb() error {
 		videos = append(videos, video)
 	}
 
-	logger.Info.Printf("FetchNewVideosAndUpdateDb: Fetched %v videos. Updating the database.", len(videos))
+	log.Infof("FetchNewVideosAndUpdateDb: Fetched %v videos. Updating the database.", len(videos))
 	err = bulkInsert(videos)
 	if err != nil {
-		logger.Error.Printf("FetchNewVideosAndUpdateDb: Error inserting into db: %v", err)
+		log.Errorf("FetchNewVideosAndUpdateDb: Error inserting into db: %v", err)
 		return err
 	}
 
@@ -145,7 +154,7 @@ func GetVideos(currPage int64) []types.Video {
 
 	cursor, err := collection.Find(ctx, bson.M{}, getFindOptions(config.GetPerPageLimit(), currPage))
 	if err != nil {
-		logger.Error.Printf("GetVideos: Error fetching videos: %v", err)
+		log.Errorf("GetVideos: Error fetching videos: %v", err)
 		return nil
 	}
 	defer cursor.Close(ctx)
@@ -155,7 +164,7 @@ func GetVideos(currPage int64) []types.Video {
 		var video types.Video
 		err := cursor.Decode(&video)
 		if err != nil {
-			logger.Error.Printf("GetVideos: Error decoding video: %v", err)
+			log.Errorf("GetVideos: Error decoding video: %v", err)
 			continue
 		}
 		videos = append(videos, video)
@@ -167,7 +176,7 @@ func SearchVideos(query string, currPage int64) []types.Video {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	logger.Info.Printf("SearchVideos: Searching for %v", query)
+	log.Infof("SearchVideos: Searching for %v", query)
 
 	perPageLimit := config.GetPerPageLimit()
 	// search only in title and description
@@ -196,7 +205,7 @@ func SearchVideos(query string, currPage int64) []types.Video {
 	}
 	sortStage := bson.D{
 		{Key: "$sort", Value: bson.M{
-			"publishedAt": -1,
+			"score": -1,
 		}},
 	}
 	setSkip := bson.D{
@@ -209,7 +218,7 @@ func SearchVideos(query string, currPage int64) []types.Video {
 	cursor, err := collection.Aggregate(ctx, mongo.Pipeline{firstMatchStage, addFieldsStage, secondMatchStage, sortStage, setSkip, setLimit})
 
 	if err != nil {
-		logger.Error.Printf("SearchVideos: Error searching videos: %v", err)
+		log.Errorf("SearchVideos: Error searching videos: %v", err)
 		return nil
 	}
 	defer cursor.Close(ctx)
@@ -217,11 +226,9 @@ func SearchVideos(query string, currPage int64) []types.Video {
 	var results []bson.M
 	err = cursor.All(ctx, &results)
 	if err != nil {
-		logger.Error.Printf("SearchVideos: Error decoding videos: %v", err)
+		log.Errorf("SearchVideos: Error decoding videos: %v", err)
 		return nil
 	}
-
-	fmt.Println(results)
 
 	videos := make([]types.Video, 0)
 	for _, result := range results {

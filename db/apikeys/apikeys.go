@@ -3,8 +3,10 @@ package apikeys
 import (
 	"context"
 	"errors"
+	"time"
 
-	"github.com/priyansi/fampay-backend-assignment/pkg/logger"
+	log "github.com/sirupsen/logrus"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"google.golang.org/api/option"
@@ -30,12 +32,12 @@ func IsKeyValid(key string) bool {
 }
 
 func InsertKey(key string) error {
-	_, err := collection.InsertOne(context.TODO(), bson.M{"key": key, "isExpired": false})
+	_, err := collection.InsertOne(context.TODO(), bson.M{"key": key, "isExpired": false, "lastUpdated": time.Now()})
 	if err != nil {
-		logger.Error.Printf("InsertKey: Error inserting key: %v", err)
+		log.Errorf("InsertKey: Error inserting key: %v", err)
 		return err
 	}
-	logger.Info.Println("InsertKey: Inserted new API key")
+	log.Info("InsertKey: Inserted new API key")
 	return nil
 }
 
@@ -43,7 +45,7 @@ func GetValidKey() (string, error) {
 	ctx := context.Background()
 	cursor, err := collection.Find(ctx, bson.M{"isExpired": false})
 	if err != nil {
-		logger.Error.Printf("GetValidKey: Error finding valid key: %v", err)
+		log.Errorf("GetValidKey: Error finding valid key: %v", err)
 		return "", errors.New("error finding valid key")
 	}
 	defer cursor.Close(ctx)
@@ -53,7 +55,7 @@ func GetValidKey() (string, error) {
 	for cursor.Next(ctx) {
 		err := cursor.Decode(&key)
 		if err != nil {
-			logger.Error.Printf("GetValidKey: Error decoding key: %v", err)
+			log.Errorf("GetValidKey: Error decoding key: %v", err)
 			continue
 		}
 		return key["key"].(string), nil
@@ -62,11 +64,31 @@ func GetValidKey() (string, error) {
 	return "", errors.New("no valid key found")
 }
 
-func CheckValidityOfKeys() {
+func SetKeyToExpired(key string) error {
 	ctx := context.Background()
-	cursor, err := collection.Find(ctx, bson.M{"isExpired": false})
+	_, err := collection.UpdateOne(ctx, bson.M{"key": key}, bson.M{"$set": bson.M{"isExpired": true, "lastUpdated": time.Now()}})
 	if err != nil {
-		logger.Error.Printf("CheckValidityOfKeys: Error finding valid key: %v", err)
+		log.Errorf("SetKeyToExpired: Error setting key to expired: %v", err)
+		return err
+	}
+	return nil
+}
+
+func SetKeyToNotExpired(key string) error {
+	ctx := context.Background()
+	_, err := collection.UpdateOne(ctx, bson.M{"key": key}, bson.M{"$set": bson.M{"isExpired": false, "lastUpdated": time.Now()}})
+	if err != nil {
+		log.Errorf("SetKeyToNotExpired: Error setting key to not expired: %v", err)
+		return err
+	}
+	return nil
+}
+
+func UpdateExpirationOfExpiredKeys() {
+	ctx := context.Background()
+	cursor, err := collection.Find(ctx, bson.M{"isExpired": true})
+	if err != nil {
+		log.Errorf("UpdateExpirationOfExpiredKeys: Error finding expired keys: %v", err)
 		return
 	}
 	defer cursor.Close(ctx)
@@ -76,11 +98,14 @@ func CheckValidityOfKeys() {
 	for cursor.Next(ctx) {
 		err := cursor.Decode(&key)
 		if err != nil {
-			logger.Error.Printf("CheckValidityOfKeys: Error decoding key: %v", err)
+			log.Errorf("UpdateExpirationOfExpiredKeys: Error decoding key: %v", err)
 			continue
 		}
-		if !IsKeyValid(key["key"].(string)) {
-			collection.UpdateOne(context.TODO(), bson.M{"key": key["key"]}, bson.M{"$set": bson.M{"isExpired": true}})
+		// check if last updated is greater than 24 hours and if key is valid
+		lastUpdated := key["lastUpdated"].(time.Time)
+		if time.Since(lastUpdated) > 24*time.Hour && IsKeyValid(key["key"].(string)) {
+			// set key to not expired
+			SetKeyToNotExpired(key["key"].(string))
 		}
 	}
 }
