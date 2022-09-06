@@ -7,6 +7,7 @@ import (
 	"github.com/priyansi/fampay-backend-assignment/db/youtubevideoinfo"
 )
 
+// SearchVideosHandler returns all the videos matching the search query in the database in a paginated manner
 func Do(c *fiber.Ctx) error {
 	searchQuery := c.Query("query", "")
 	if searchQuery == "" {

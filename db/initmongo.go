@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
+// Establishes connection to the mongo database, sets collections and creates indexes
 func InitMongoDb() {
 	client := ConnectToMongoDb()
 	youtubevideoinfo.SetCollection(client)

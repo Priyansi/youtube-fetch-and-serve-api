@@ -29,6 +29,7 @@ func SetCollection(client *mongo.Client) {
 	collection = client.Database("youtube-fetch-search").Collection("youtube-video-info")
 }
 
+// Creates a compound text index of title and description so that they can be queried together
 func CreateTitleAndDescriptionIndex() {
 	model := mongo.IndexModel{
 		Keys: bson.D{
@@ -50,7 +51,8 @@ func CreateTitleAndDescriptionIndex() {
 	}
 }
 
-// insert many entries into the youtube-video-info collection
+// Inserts multiple entries into the youtube-video-info collection
+// Do nothing if the entry already exists
 func bulkInsert(videos []types.Video) error {
 	models := make([]mongo.WriteModel, 0)
 	for _, video := range videos {
@@ -76,17 +78,30 @@ func bulkInsert(videos []types.Video) error {
 	return nil
 }
 
+// Fetches videos from youtube api and inserts them into the database.
+// If the etag is same, do nothing.
 func FetchNewVideosAndUpdateDb() error {
 	ctx := context.Background()
-	key, err := apikeys.GetValidKey()
-	if err != nil {
-		log.Errorf("FetchNewVideosAndUpdateDb: Error fetching valid key: %v", err)
-		log.Errorf("FetchNewVideosAndUpdateDb: Please post new api keys as given in README")
-		return err
+
+	// avoids unnecessary multiple calls to the database
+	key := config.GetValidApiKey()
+
+	// for first call to this function, API key will not be set
+	if key == "" {
+		var err error
+		key, err = apikeys.GetValidKey()
+		if err != nil {
+			log.Errorf("FetchNewVideosAndUpdateDb: Error fetching valid key: %v", err)
+			log.Errorf("FetchNewVideosAndUpdateDb: Please post new api keys as given in README")
+			return err
+		}
+		config.SetValidApiKey(key)
 	}
+
 	youtubeService, err := youtube.NewService(ctx, option.WithAPIKey(key))
 	if err != nil {
 		log.Errorf("FetchNewVideosAndUpdateDb: Error creating new service: %v", err)
+		return err
 	}
 
 	call := youtubeService.Search.List([]string{"id,snippet"}).
@@ -112,13 +127,19 @@ func FetchNewVideosAndUpdateDb() error {
 			if err != nil {
 				log.Errorf("FetchNewVideosAndUpdateDb: Error setting quota exceeded key to expired: %v", err)
 			}
+			key, err := apikeys.GetValidKey()
+			if err != nil {
+				log.Errorf("FetchNewVideosAndUpdateDb: Error fetching valid key: %v", err)
+				log.Errorf("FetchNewVideosAndUpdateDb: Please post new api keys as given in README")
+				return err
+			}
+			config.SetValidApiKey(key)
 			return err
 		}
 		log.Errorf("FetchNewVideosAndUpdateDb: Error fetching response: %v", err)
 		return err
 	}
 
-	log.Info("FetchNewVideosAndUpdateDb: Fetched response from youtube")
 	videos := make([]types.Video, 0)
 	for _, item := range response.Items {
 		video := types.Video{
@@ -141,18 +162,17 @@ func FetchNewVideosAndUpdateDb() error {
 	return nil
 }
 
-func getFindOptions(perPageLimit int64, currPage int64) *options.FindOptions {
-	findOptions := options.Find()
-	findOptions.SetSkip((currPage - 1) * perPageLimit)
-	findOptions.SetLimit(perPageLimit)
-	return findOptions
-}
-
+// Get videos from database in paginated format
 func GetVideos(currPage int64) []types.Video {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cursor, err := collection.Find(ctx, bson.M{}, getFindOptions(config.GetPerPageLimit(), currPage))
+	// Searches for videos in a paginated manner
+	findOptions := options.Find()
+	findOptions.SetSkip((currPage - 1) * config.GetPerPageLimit())
+	findOptions.SetLimit(config.GetPerPageLimit())
+
+	cursor, err := collection.Find(ctx, bson.M{}, findOptions)
 	if err != nil {
 		log.Errorf("GetVideos: Error fetching videos: %v", err)
 		return nil
@@ -172,6 +192,9 @@ func GetVideos(currPage int64) []types.Video {
 	return videos
 }
 
+// Searches videos in the database using the given query
+// Sorts videos according to score and shows videos with a score greater than 1
+// Returns the videos in paginated format
 func SearchVideos(query string, currPage int64) []types.Video {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

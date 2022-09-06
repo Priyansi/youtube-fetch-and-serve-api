@@ -7,6 +7,7 @@ import (
 	"github.com/priyansi/fampay-backend-assignment/db/youtubevideoinfo"
 )
 
+// GetVideosHandler returns all the videos in the database in a paginated manner
 func Do(c *fiber.Ctx) error {
 
 	page, err := strconv.Atoi(c.Query("page", "1"))

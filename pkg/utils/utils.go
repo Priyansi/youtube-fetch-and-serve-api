@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Converts string environment variable to int64. Returns default value if not found
 func GetEnvInt(key string, defaultVal int64) int64 {
 	s := os.Getenv(key)
 	if s == "" {

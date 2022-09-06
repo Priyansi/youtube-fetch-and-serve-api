@@ -5,8 +5,9 @@ import (
 	"github.com/priyansi/fampay-backend-assignment/db/apikeys"
 )
 
+// PostAPIKeyHandler adds a new API key to the database if it is valid
 func Do(c *fiber.Ctx) error {
-	apiKey := c.Query("api_key", "")
+	apiKey := c.Query("key", "")
 	if apiKey == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "api_key query param is required",

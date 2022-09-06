@@ -6,6 +6,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Redirect formatted logs to a file if available else prints them
 func InitLogger() {
 	log.SetOutput(os.Stdout)
 
@@ -18,6 +19,6 @@ func InitLogger() {
 	if err == nil {
 		log.SetOutput(f)
 	} else {
-		log.Info("Failed to log to file, using default stderr")
+		log.Info("Failed to log to file, using default stdout")
 	}
 }

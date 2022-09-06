@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/priyansi/fampay-backend-assignment/pkg/config"
 	log "github.com/sirupsen/logrus"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -19,18 +20,25 @@ func SetCollection(client *mongo.Client) {
 	collection = client.Database("youtube-fetch-search").Collection("api-keys")
 }
 
+// Makes a single read call to YouTube API to check if the key is valid
 func IsKeyValid(key string) bool {
 	ctx := context.Background()
 	youtubeService, err := youtube.NewService(ctx, option.WithAPIKey(key))
 	if err != nil {
+		log.Errorf("IsKeyValid: Error creating YouTube service: %v", err)
 		return false
 	}
 
 	call := youtubeService.Channels.List([]string{"id"}).ForUsername("Youtube")
 	_, err = call.Do()
-	return err == nil
+	if err != nil {
+		log.Errorf("IsKeyValid: Error making YouTube API call: %v", err)
+		return false
+	}
+	return true
 }
 
+// Inserts a new key into the database
 func InsertKey(key string) error {
 	_, err := collection.InsertOne(context.TODO(), bson.M{"key": key, "isExpired": false, "lastUpdated": time.Now()})
 	if err != nil {
@@ -42,6 +50,10 @@ func InsertKey(key string) error {
 }
 
 func GetValidKey() (string, error) {
+	if config.GetValidApiKey() != "" {
+		return config.GetValidApiKey(), nil
+	}
+
 	ctx := context.Background()
 	cursor, err := collection.Find(ctx, bson.M{"isExpired": false})
 	if err != nil {
@@ -64,6 +76,7 @@ func GetValidKey() (string, error) {
 	return "", errors.New("no valid key found")
 }
 
+// Expires a API key
 func SetKeyToExpired(key string) error {
 	ctx := context.Background()
 	_, err := collection.UpdateOne(ctx, bson.M{"key": key}, bson.M{"$set": bson.M{"isExpired": true, "lastUpdated": time.Now()}})
@@ -74,6 +87,7 @@ func SetKeyToExpired(key string) error {
 	return nil
 }
 
+// Sets a API key to not expired
 func SetKeyToNotExpired(key string) error {
 	ctx := context.Background()
 	_, err := collection.UpdateOne(ctx, bson.M{"key": key}, bson.M{"$set": bson.M{"isExpired": false, "lastUpdated": time.Now()}})
@@ -84,6 +98,7 @@ func SetKeyToNotExpired(key string) error {
 	return nil
 }
 
+// Sets keys whose last updated time is more than 24 hours to not expired
 func UpdateExpirationOfExpiredKeys() {
 	ctx := context.Background()
 	cursor, err := collection.Find(ctx, bson.M{"isExpired": true})

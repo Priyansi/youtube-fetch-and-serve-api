@@ -17,6 +17,7 @@ import (
 func main() {
 	logger.InitLogger()
 
+	// Load environment variables from config file
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("main: failed to load environment variables")
 	}
@@ -24,6 +25,7 @@ func main() {
 	config.InitConfig()
 	db.InitMongoDb()
 
+	// Start a goroutine to fetch videos from youtube periodically
 	go func() {
 		ticker := time.NewTicker(time.Duration(config.GetFetchLatestVideosSeconds()) * time.Second)
 		quit := make(chan struct{})
@@ -42,6 +44,7 @@ func main() {
 
 	}()
 
+	// Start a goroutine to update expiation of API keys in the database periodically
 	go func() {
 		ticker := time.NewTicker(time.Duration(config.GetUpdateApiKeysExpirationMinutes()) * time.Minute)
 		quit := make(chan struct{})
@@ -60,5 +63,6 @@ func main() {
 	app := fiber.New()
 	router.SetRoutes(app)
 
+	log.Infof("main: Starting server on port %v", config.GetAddrPort())
 	app.Listen(config.GetAddrPort())
 }

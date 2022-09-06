@@ -16,7 +16,7 @@ func SetRoutes(app *fiber.App) {
 		return searchvideos.Do(c)
 	})
 
-	app.Post("/post_api_key", func(c *fiber.Ctx) error {
+	app.Post("/new_api_key", func(c *fiber.Ctx) error {
 		return postapikey.Do(c)
 	})
 }
